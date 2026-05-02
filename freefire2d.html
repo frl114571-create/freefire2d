@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FREE FIRE 2D - FULL</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@700&family=Orbitron:wght@400;700;900&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { background:#0a0a0f; font-family:'Orbitron',monospace; overflow:hidden; color:#fff; user-select:none; touch-action:none; }
+
+  /* MENU */
+  #menu { position:fixed; inset:0; background:radial-gradient(ellipse at center,#1a0a00 0%,#0a0a0f 70%); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:100; }
+  #menu h1 { font-size:clamp(2rem,10vw,4rem); font-weight:900; color:#ff6a00; text-shadow:0 0 40px #ff6a00,0 0 80px #ff3300; letter-spacing:8px; animation:pulse 2s infinite; margin-bottom:.2em; }
+  #menu .sub { color:#ffaa44; font-size:clamp(.6rem,3vw,1rem); letter-spacing:5px; margin-bottom:2.5rem; opacity:.8; text-align:center; }
+  @keyframes pulse { 0%,100%{text-shadow:0 0 40px #ff6a00,0 0 80px #ff3300;} 50%{text-shadow:0 0 60px #ffaa00,0 0 120px #ff6600;} }
+  .btn { background:linear-gradient(135deg,#ff6a00,#ee0979); border:none; color:#fff; font-family:'Orbitron',monospace; font-size:clamp(.8rem,3.5vw,1.1rem); font-weight:700; letter-spacing:3px; padding:clamp(10px,3vw,14px) clamp(28px,8vw,48px); cursor:pointer; clip-path:polygon(12px 0%,100% 0%,calc(100% - 12px) 100%,0% 100%); transition:all .2s; margin:8px; }
+  .btn:hover { transform:scale(1.07); box-shadow:0 0 30px #ff6a0088; }
+
+  /* HUD */
+  #hud { position:fixed; top:0; left:0; right:0; display:none; justify-content:space-between; padding:15px; pointer-events:none; z-index:50; }
+  .hud-box { background:rgba(0,0,0,.75); border:1px solid #ff6a0055; padding:8px 15px; font-size:12px; color:#ffaa44; }
+  #hp-bar-wrap { width:150px; }
+  #hp-bar { height:8px; background:#1a0500; border:1px solid #ff6a0055; margin-top:5px; }
+  #hp-fill { height:100%; background:linear-gradient(90deg,#ff3300,#ff9900); width:100%; transition: 0.3s; }
+
+  canvas { display:block; }
+
+  /* MOBILE CONTROLS */
+  #mobile-controls { position:fixed; bottom:20px; left:20px; right:20px; display:none; justify-content:space-between; align-items:flex-end; z-index:60; }
+  #joystick-zone { width:120px; height:120px; background:rgba(255,255,255,0.1); border-radius:50%; position:relative; }
+  #joystick-stick { width:50px; height:50px; background:#ff6a00; border-radius:50%; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
+  #fire-btn { width:80px; height:80px; background:red; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:20px; box-shadow:0 0 20px rgba(255,0,0,0.5); pointer-events: auto; }
+
+  #gameover { position:fixed; inset:0; background:rgba(0,0,0,0.9); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:200; }
+</style>
+</head>
+<body>
+
+<div id="menu">
+  <h1>FREE FIRE</h1>
+  <div class="sub">2D BATTLE ROYALE</div>
+  <button class="btn" onclick="startGame()">▶ O'YINNI BOSHLASH</button>
+</div>
+
+<div id="hud">
+  <div class="hud-box" id="hp-bar-wrap">
+    <div>HP: <span id="hp-val">100</span></div>
+    <div id="hp-bar"><div id="hp-fill"></div></div>
+  </div>
+  <div class="hud-box">AMMO: <span id="ammo">30</span></div>
+  <div class="hud-box">KILLS: <span id="kills">0</span></div>
+</div>
+
+<div id="mobile-controls">
+  <div id="joystick-zone" id="touch-move">
+    <div id="joystick-stick"></div>
+  </div>
+  <div id="fire-btn" ontouchstart="isFiring=true" ontouchend="isFiring=false">🔥</div>
+</div>
+
+<div id="gameover">
+  <h2 id="go-status" style="font-size:3rem; color:red;">GAME OVER</h2>
+  <button class="btn" onclick="location.reload()">QAYTADAN</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let running = false;
+let player = { x: 1000, y: 1000, hp: 100, kills: 0, ammo: 30, angle: 0 };
+let bots = [];
+let bullets = [];
+let keys = {};
+let isFiring = false;
+
+// O'yinni boshlash
+function startGame() {
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('hud').style.display = 'flex';
+    if('ontouchstart' in window) document.getElementById('mobile-controls').style.display = 'flex';
+    running = true;
+    spawnBots();
+    requestAnimationFrame(gameLoop);
+}
+
+function spawnBots() {
+    for(let i=0; i<15; i++) {
+        bots.push({
+            x: Math.random() * 2000,
+            y: Math.random() * 2000,
+            hp: 100,
+            alive: true
+        });
+    }
+}
+
+// Boshqaruv
+window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+window.onmousedown = () => isFiring = true;
+window.onmouseup = () => isFiring = false;
+window.onmousemove = (e) => {
+    player.angle = Math.atan2(e.clientY - canvas.height/2, e.clientX - canvas.width/2);
+};
+
+function update() {
+    if(!running) return;
+
+    if(keys['w']) player.y -= 3;
+    if(keys['s']) player.y += 3;
+    if(keys['a']) player.x -= 3;
+    if(keys['d']) player.x += 3;
+
+    if(isFiring && player.ammo > 0) {
+        bullets.push({ x: player.x, y: player.y, angle: player.angle, speed: 10, fromPlayer: true });
+        player.ammo--;
+        isFiring = false; // Semi-auto
+    }
+
+    bullets.forEach((b, index) => {
+        b.x += Math.cos(b.angle) * b.speed;
+        b.y += Math.sin(b.angle) * b.speed;
+        
+        // Botlarga tegishini tekshirish
+        bots.forEach(bot => {
+            if(bot.alive && Math.hypot(b.x - bot.x, b.y - bot.y) < 20) {
+                bot.hp -= 25;
+                bullets.splice(index, 1);
+                if(bot.hp <= 0) {
+                    bot.alive = false;
+                    player.kills++;
+                }
+            }
+        });
+    });
+
+    // HUD yangilash
+    document.getElementById('hp-val').innerText = player.hp;
+    document.getElementById('hp-fill').style.width = player.hp + "%";
+    document.getElementById('ammo').innerText = player.ammo;
+    document.getElementById('kills').innerText = player.kills;
+
+    if(player.hp <= 0) {
+        running = false;
+        document.getElementById('gameover').style.display = 'flex';
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(canvas.width/2 - player.x, canvas.height/2 - player.y);
+
+    // Xarita (Grid)
+    ctx.strokeStyle = "#333";
+    for(let i=0; i<2000; i+=100) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 2000); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(2000, i); ctx.stroke();
+    }
+
+    // Botlar
+    bots.forEach(bot => {
+        if(bot.alive) {
+            ctx.fillStyle = "red";
+            ctx.beginPath(); ctx.arc(bot.x, bot.y, 15, 0, Math.PI*2); ctx.fill();
+        }
+    });
+
+    // O'qlar
+    ctx.fillStyle = "yellow";
+    bullets.forEach(b => {
+        ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+    });
+
+    ctx.restore();
+
+    // O'yinchi (Ekranning markazida turadi)
+    ctx.save();
+    ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.rotate(player.angle);
+    ctx.fillStyle = "#00e5ff";
+    ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "black";
+    ctx.fillRect(10, -5, 15, 10); // Qurol
+    ctx.restore();
+}
+
+function gameLoop() {
+    update();
+    draw();
+    if(running) requestAnimationFrame(gameLoop);
+}
+</script>
+</body>
+</html>
